@@ -1,0 +1,79 @@
+NODE_ENV: "production"
+
+frontend:
+  image: 
+    repo: "registry.gitlab.stratpoint.cloud/devops-bootcamp/interns-batch2026-2/devops-magdamo-bien/piping-devops-pipelines/frontend"
+    tag: "latest"
+  port: 3000
+  service_type: "ClusterIP"
+  replicas: 1
+  env:
+    REACT_APP_API_URL: "/api"
+    BROWSER: "none"
+    
+backend:
+  image: 
+    repo: "registry.gitlab.stratpoint.cloud/devops-bootcamp/interns-batch2026-2/devops-magdamo-bien/piping-devops-pipelines/backend"
+    tag: "latest"
+  port: 3000
+  replicas: 1  
+  service_type: "ClusterIP"
+  env:
+    PORT: "3000"
+    DB_HOST: "{{ .Release.Name }}-postgres-service"
+    DB_PORT: "5432"
+    DB_NAME: "taskdb"
+
+    # --- OpenTelemetry Configuration ---
+    OTEL_SERVICE_NAME: "task-app-backend"
+    OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: "http://tempo-cluster-ops.observability.svc.cluster.local:4318/v1/traces"
+    OTEL_LOG_LEVEL: "error"
+    OTEL_METRICS_EXPORTER: "none"
+    OTEL_LOGS_EXPORTER: "none"
+    NODE_OPTIONS: "--require ./instrumentation.js"
+
+postgres:
+  image: 
+    repo: "postgres"
+    tag: "17-alpine"
+  port: 5432
+  service_type: "ClusterIP"
+  storage: 1Gi
+  env:
+    POSTGRES_DB: "taskdb"
+    PGDATA: "/var/lib/postgresql/data/pgdata"
+  initSql: |
+    CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
+    CREATE TABLE IF NOT EXISTS tasks (
+        id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+        title VARCHAR(255) NOT NULL,
+        description TEXT,
+        status VARCHAR(20) DEFAULT 'TODO' CHECK (status IN ('TODO', 'IN_PROGRESS', 'DONE')),
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
+    CREATE INDEX IF NOT EXISTS idx_tasks_created_at ON tasks(created_at);
+
+    CREATE OR REPLACE FUNCTION update_updated_at_column()
+    RETURNS TRIGGER AS $$
+    BEGIN
+        NEW.updated_at = CURRENT_TIMESTAMP;
+        RETURN NEW;
+    END;
+    $$ language 'plpgsql';
+
+    DROP TRIGGER IF EXISTS update_tasks_updated_at ON tasks;
+    CREATE TRIGGER update_tasks_updated_at
+        BEFORE UPDATE ON tasks
+        FOR EACH ROW
+        EXECUTE FUNCTION update_updated_at_column();
+
+    INSERT INTO tasks (title, description, status) VALUES
+        ('Complete frontend', 'Implement React components', 'IN_PROGRESS'),
+        ('Set up database', 'Configure PostgreSQL', 'DONE'),
+        ('Add image updater', 'Configure ArgoCD auto-refresh', 'DONE'),
+        ('Write API endpoints', 'Create REST API with Express', 'TODO');
+        

@@ -1,0 +1,51 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: task-app-prod
+  namespace: argocd
+  annotations:
+    # 1. The image list
+    argocd-image-updater.argoproj.io/image-list: backend=registry.gitlab.stratpoint.cloud/devops-bootcamp/interns-batch2026-2/devops-magdamo-bien/piping-devops-pipelines/backend, frontend=registry.gitlab.stratpoint.cloud/devops-bootcamp/interns-batch2026-2/devops-magdamo-bien/piping-devops-pipelines/frontend
+    argocd-image-updater.argoproj.io/write-back-method: argocd # Write back to the ArgoCD API, not Git
+
+    # Backend
+    argocd-image-updater.argoproj.io/backend.pull-secret: secret:argocd/gitlab-registry-secret
+    argocd-image-updater.argoproj.io/backend.update-strategy: digest
+    argocd-image-updater.argoproj.io/backend.helm.image-tag:  backend.image.tag
+
+    # Frontend
+    argocd-image-updater.argoproj.io/frontend.pull-secret: secret:argocd/gitlab-registry-secret
+    argocd-image-updater.argoproj.io/frontend.update-strategy: digest
+    argocd-image-updater.argoproj.io/frontend.helm.image-tag: frontend.image.tag
+spec:
+  project: default
+  destination:
+    server: 'https://kubernetes.default.svc'
+    namespace: task-app-prod # Helm template .Release.namespace
+  syncPolicy:
+    automated:
+      prune: true      # Automatically delete resources that are removed from Git
+      selfHeal: true   # Automatically revert manual changes made via kubectl
+    syncOptions:
+      - CreateNamespace=true
+  sources:
+    # 1. Primary Helm Chart source
+    - repoURL: 'https://gitlab.stratpoint.cloud/devops-bootcamp/interns-batch2026-2/devops-magdamo-bien/piping-devops-pipelines.git'
+      targetRevision: HEAD
+      path: kubernetes/helm/task-app # The directory where your values.yaml lives
+      helm:
+        valueFiles:
+          # Targets base values.yaml
+          - $values/kubernetes/base/task-app/task-app-values-base.yaml
+          # Targets environment specific values.yaml
+          - $values/kubernetes/overlays/prod/task-app/task-app-values-patch.yaml
+    
+    # 2. Environment specific sealed secrets
+    - repoURL: 'https://gitlab.stratpoint.cloud/devops-bootcamp/interns-batch2026-2/devops-magdamo-bien/piping-devops-pipelines.git'
+      targetRevision: HEAD
+      path: kubernetes/overlays/prod/task-app/sealed-secrets
+    
+    # 3. Reference source for Helm values lookup
+    - repoURL: 'https://gitlab.stratpoint.cloud/devops-bootcamp/interns-batch2026-2/devops-magdamo-bien/piping-devops-pipelines.git'
+      targetRevision: HEAD
+      ref: values

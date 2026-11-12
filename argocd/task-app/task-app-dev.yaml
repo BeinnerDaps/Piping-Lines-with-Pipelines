@@ -1,0 +1,38 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: task-app-dev
+  namespace: argocd
+spec:
+  project: default
+  destination:
+    server: 'https://kubernetes.default.svc'
+    namespace: task-app-dev # Helm template .Release.namespace
+  syncPolicy:
+    automated:
+      prune: true      # Automatically delete resources that are removed from Git
+      selfHeal: true   # Automatically revert manual changes made via kubectl
+    syncOptions:
+      - CreateNamespace=true
+  sources:
+    # 1. Primary Helm Chart source
+    - repoURL: 'https://gitlab.stratpoint.cloud/devops-bootcamp/interns-batch2026-2/devops-magdamo-bien/piping-devops-pipelines.git'
+      targetRevision: HEAD
+      path: kubernetes/helm/task-app # The directory where your values.yaml lives
+      helm:
+        valueFiles:
+          # Targets base values.yaml
+          - $values/kubernetes/base/task-app/task-app-values-base.yaml
+          # Targets environment specific values.yaml
+          - $values/kubernetes/overlays/dev/task-app/task-app-values-patch.yaml
+    
+    # 2. Environment specific sealed secrets
+    - repoURL: 'https://gitlab.stratpoint.cloud/devops-bootcamp/interns-batch2026-2/devops-magdamo-bien/piping-devops-pipelines.git'
+      targetRevision: HEAD
+      path: kubernetes/overlays/dev/task-app/sealed-secrets
+    
+    # 3. Reference source for Helm values lookup
+    - repoURL: 'https://gitlab.stratpoint.cloud/devops-bootcamp/interns-batch2026-2/devops-magdamo-bien/piping-devops-pipelines.git'
+      targetRevision: HEAD
+      ref: values
+  

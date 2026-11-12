@@ -1,0 +1,15 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ .Release.Name }}-backend-monitor
+  labels:
+    # This label tells the Prometheus Operator to pick up this configuration
+    release: prometheus-cluster-ops
+spec:
+  selector:
+    matchLabels:
+      app: backend
+  endpoints:
+    - port: http # This must match the name of the port in your backend Service manifest
+      path: /metrics
+      interval: 15s

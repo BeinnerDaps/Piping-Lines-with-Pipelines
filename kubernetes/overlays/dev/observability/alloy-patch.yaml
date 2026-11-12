@@ -1,0 +1,15 @@
+# ---------------------------------------------------------
+# DEV Overrides for /kubernetes/overlays/dev/observability/alloy-patch.yaml
+# ---------------------------------------------------------
+
+# Run strictly as a DaemonSet for log collection
+controller:
+  type: daemonset
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 128Mi
+  limits:
+    cpu: 200m
+    memory: 256Mi

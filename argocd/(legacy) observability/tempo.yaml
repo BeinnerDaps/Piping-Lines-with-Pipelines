@@ -1,0 +1,48 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: observability-stack
+  namespace: argocd
+  annotations:
+    # Prevents parent applications from deleting this Application object
+    argocd.argoproj.io/sync-options: PreventDeletion=true
+spec:
+  syncPolicy:
+    applicationsSync: create-update
+    preserveResourcesOnDeletion: true
+  generators:
+    - list:
+        elements:
+          - env: dev
+            cluster_url: https://kubernetes.default.svc
+          # - env: prod
+          #   cluster_url: https://kubernetes.default.svc # Change to prod-cluster in actual prod deployment
+  template:
+    metadata:
+      name: tempo-cluster-ops
+      namespace: argocd
+    spec:
+      project: default
+      syncPolicy:
+        automated:
+          prune: false
+          selfHeal: true
+      sources:
+        # Source 1: Prometheus public Helm chart
+        - repoURL: https://grafana-community.github.io/helm-charts
+          chart: tempo
+          targetRevision: 1.8.0 
+          helm:
+            valueFiles:
+              # Base definition applied first
+              - $values/kubernetes/base/observability/tempo-base.yaml
+              # Environment specific mutations applied second
+              - $values/kubernetes/overlays/{{env}}/observability/tempo-patch.yaml
+        
+        # Source 2: GitLab repo containing the overrides
+        - repoURL: 'https://gitlab.stratpoint.cloud/devops-bootcamp/interns-batch2026-2/devops-magdamo-bien/piping-devops-pipelines.git'
+          targetRevision: HEAD
+          ref: values
+      destination:
+        server: '{{cluster_url}}' # generator.list.elements.cluster_url
+        namespace: observability

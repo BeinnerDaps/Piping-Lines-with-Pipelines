@@ -1,0 +1,164 @@
+stages:
+  - build
+  - update-manifests
+  - bootstrap
+
+variables:
+  DOCKER_TLS_CERTDIR: ""
+  DOCKER_HOST: tcp://docker:2375
+  FF_NETWORK_PER_BUILD: "true"
+
+### ============================================ ###
+### Add app images to GitLabs container registry ###
+### ============================================ ###
+
+.build_images_base:
+  image: docker:24.0.5
+  services:
+    - docker:24.0.5-dind
+  retry:
+    max: 2
+    when: 
+      - runner_system_failure
+      - stuck_or_timeout_failure
+  before_script:
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+
+build_frontend:
+  extends: .build_images_base
+  stage: build
+  script:
+    # Build and push backend
+    - docker build 
+        -t $CI_REGISTRY_IMAGE/frontend:$CI_COMMIT_SHORT_SHA 
+        -t $CI_REGISTRY_IMAGE/frontend:latest 
+        ./app/frontend
+    - docker push $CI_REGISTRY_IMAGE/frontend:$CI_COMMIT_SHORT_SHA
+    - docker push $CI_REGISTRY_IMAGE/frontend:latest
+  rules:
+    - changes:
+        - app/frontend/**/*
+
+build_backend:
+  extends: .build_images_base
+  stage: build
+  script:
+    # Build and push backend
+    - docker build 
+        -t $CI_REGISTRY_IMAGE/backend:$CI_COMMIT_SHORT_SHA
+        -t $CI_REGISTRY_IMAGE/backend:latest 
+        ./app/backend
+    - docker push $CI_REGISTRY_IMAGE/backend:$CI_COMMIT_SHORT_SHA
+    - docker push $CI_REGISTRY_IMAGE/backend:latest
+  rules:
+    - changes:
+        - app/backend/**/*
+
+### ============================================ ###
+### Base template for the manifest-update jobs   ###
+### ============================================ ###
+
+# .update_manifests_base:
+#   image: mikefarah/yq:4.44.3
+#   retry:
+#     max: 2
+#     when: 
+#       - runner_system_failure
+#       - stuck_or_timeout_failure
+#   before_script:
+#     - apk add --no-cache git
+#     - git config --global user.email "i_bienrafael.magdamo@stratpoint.com"
+#     - git config --global user.name "write_repo_token"
+#     - git remote set-url origin "https://write_repo_token:${MANIFEST_PUSH_TOKEN}@gitlab.stratpoint.cloud/devops-bootcamp/interns-batch2026-2/devops-magdamo-bien/piping-devops-pipelines.git"
+#   script:
+#     - yq -i ".backend.image.tag = strenv(CI_COMMIT_SHORT_SHA)" ${PATCH_FILE}
+#     - yq -i ".frontend.image.tag = strenv(CI_COMMIT_SHORT_SHA)" ${PATCH_FILE}
+#     - 'git commit -am "chore: bump ${CI_ENVIRONMENT_NAME} images to ${CI_COMMIT_SHORT_SHA} [skip ci]"'
+#     - git push origin HEAD:${CI_COMMIT_BRANCH}
+
+# ### ================= ###
+# ### DEV manifest bump ###
+# ### ================= ###
+
+# update_manifests_dev:
+#   extends: .update_manifests_base
+#   stage: update-manifests
+#   needs:
+#     - build_images
+#   variables:
+#     PATCH_FILE: "kubernetes/overlays/dev/task-app/task-app-values-patch.yaml"
+#   environment:
+#     name: dev
+#   rules:
+#     - if: '$CI_COMMIT_BRANCH != "main"'
+#       changes:
+#         - app/backend/**/*
+#         - app/frontend/**/*
+
+# ### ================== ###
+# ### PROD manifest bump ###
+# ### ================== ###
+
+# update_manifests_prod:
+#   extends: .update_manifests_base
+#   stage: update-manifests
+#   variables:
+#     PATCH_FILE: "kubernetes/overlays/prod/task-app/task-app-values-patch.yaml"
+#   needs:
+#     - build_images
+#   environment:
+#     name: prod
+#   rules:
+#     - if: '$CI_COMMIT_BRANCH == "main"'
+#       changes:
+#         - app/backend/**/*
+#         - app/frontend/**/*
+#       when: manual
+
+### ============================================ ###
+### Bootstrap application to gitlab role         ###
+### ============================================ ###
+
+# bootstrap-eks:
+#   stage: bootstrap
+#   image:
+#     name: amazon/aws-cli:latest
+#     entrypoint: [""]
+#   id_tokens:
+#     GITLAB_OIDC_TOKEN:
+#       aud: https://gitlab.stratpoint.cloud
+#   before_script:
+#     - yum install -y tar gzip git openssl
+#     # 1. DECODE AND PRINT THE TOKEN
+#     - echo "[*] Decoding GitLab OIDC Token Payload:"
+#     - python3 -c "import sys, json, base64; print(json.dumps(json.loads(base64.urlsafe_b64decode(sys.argv[1].split('.')[1] + '==').decode('utf-8')), indent=2))" "$GITLAB_OIDC_TOKEN"
+    
+#     # 1. Authenticate via AWS OIDC using your existing ROLE_ARN
+#     - >
+#       ASSUME_ROLE_OUTPUT=$(aws sts assume-role-with-web-identity
+#       --role-arn ${ROLE_ARN}
+#       --role-session-name "GitLabRunner-${CI_PROJECT_ID}-${CI_PIPELINE_ID}"
+#       --web-identity-token ${GITLAB_OIDC_TOKEN}
+#       --duration-seconds 3600
+#       --query 'Credentials.[AccessKeyId,SecretAccessKey,SessionToken]'
+#       --output text)
+
+#     - export AWS_ACCESS_KEY_ID=$(echo "$ASSUME_ROLE_OUTPUT" | awk '{print $1}')
+#     - export AWS_SECRET_ACCESS_KEY=$(echo "$ASSUME_ROLE_OUTPUT" | awk '{print $2}')
+#     - export AWS_SESSION_TOKEN=$(echo "$ASSUME_ROLE_OUTPUT" | awk '{print $3}')
+#     - aws sts get-caller-identity
+    
+#     # 2. Install kubectl & Helm
+    
+#     - curl -sLO "https://dl.k8s.io/release/v1.31.0/bin/linux/amd64/kubectl"
+#     - chmod +x ./kubectl && mv ./kubectl /usr/local/bin/
+#     - curl -s https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+#   script:
+#     - export CLUSTER_NAME="${EKS_CLUSTER_NAME:-task-app-demo}"
+#     - export REGION="${AWS_REGION:-ap-southeast-1}"
+#     - chmod +x ./bootstrap/bootstrap-aws.sh
+#     - ./bootstrap/bootstrap-aws.sh aws task-app-aws "$CLUSTER_NAME" "$REGION"
+#   rules:
+#     - if: $CI_PIPELINE_SOURCE == "pipeline"
+#     - if: $CI_PIPELINE_SOURCE == "web"
+#     - if: $CI_COMMIT_BRANCH == "main"

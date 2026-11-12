@@ -1,0 +1,48 @@
+# ---------------------------------------------------------
+# BASE default for /kubernetes/base/observability/alloy-base.yaml
+# ---------------------------------------------------------
+
+alloy:
+  mounts:
+    varlog: true # Matches your terminal script requirement
+
+  configMap:
+    content: |-
+      // Discover Kubernetes pods
+      discovery.kubernetes "pods" {
+        role = "pod"
+      }
+      
+      // Relabeling to extract namespace, pod, and container names
+      discovery.relabel "pod_logs" {
+        targets = discovery.kubernetes.pods.targets
+        rule {
+          source_labels = ["__meta_kubernetes_namespace"]
+          target_label  = "namespace"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_pod_name"]
+          target_label  = "pod"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_pod_container_name"]
+          target_label  = "container"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_pod_label_app"]
+          target_label  = "service_name"
+        }
+      }
+
+      // Tail the logs
+      loki.source.kubernetes "local_pods" {
+        targets    = discovery.relabel.pod_logs.output
+        forward_to = [loki.write.endpoint.receiver]
+      }
+
+      // Send to Loki (using Kubernetes DNS for the Loki service)
+      loki.write "endpoint" {
+        endpoint {
+          url = "http://loki-cluster-ops.observability.svc.cluster.local:3100/loki/api/v1/push"
+        }
+      }

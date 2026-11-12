@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-postgres-configmap
+data:
+  {{- range $key, $value := .Values.postgres.env }}
+  {{ $key }}: {{ tpl $value $ | quote }}
+  {{- end }}
+  {{- if .Values.postgres.initSql }}
+  init.sql: |-
+{{ .Values.postgres.initSql | indent 4 }}
+  {{- end }}

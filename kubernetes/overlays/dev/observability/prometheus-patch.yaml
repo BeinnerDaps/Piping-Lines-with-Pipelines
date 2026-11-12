@@ -1,0 +1,62 @@
+# ---------------------------------------------------------
+# DEV Overrides for /kubernetes/overlays/dev/observability/prometheus-patch.yaml
+# ---------------------------------------------------------
+
+# Degrade HA for local dev
+grafana:
+  replicas: 1 
+
+# Degrade HA for local dev
+prometheus:
+  prometheusSpec:
+    replicas: 1 
+    retention: 7d # Keep local footprint small
+    
+    # Strip Anti-Affinity since we only have a single kind node
+    affinity: {}
+
+    # Burstable QoS: Lower requests, higher limits for local execution
+    resources:
+      requests:
+        memory: 256Mi
+        cpu: 100m
+      limits:
+        memory: 512Mi
+        cpu: 500m
+
+    # Ephemeral State: Nullify volumeClaimTemplate and use standard emptyDir
+    storageSpec:
+      emptyDir: {}
+
+# Disable heavy/conflicting components for local kind/WSL2 context
+alertmanager:
+  enabled: true
+  alertmanagerSpec:
+    replicas: 1
+    resources:
+      requests:
+        cpu: 25m
+        memory: 64Mi
+      limits:
+        cpu: 100m
+        memory: 128Mi
+    storage:
+      emptyDir: {}
+
+# Keep Node Exporter disabled on WSL2
+prometheus-node-exporter:
+  enabled: false # Node exporter often fails in WSL2/Docker Desktop networking
+
+prometheusOperator:
+  admissionWebhooks:
+    enabled: false
+  tls:
+    enabled: false
+
+# Disable massive default alerting rules for local kind
+defaultRules:
+  create: false
+
+# Disable default Grafana dashboards shipped with the chart
+grafana:
+  defaultDashboardsEnabled: false

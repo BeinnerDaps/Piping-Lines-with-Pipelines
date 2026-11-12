@@ -1,0 +1,3 @@
+# ---------------------------------------------------------
+# PROD OVERRIDES /kubernetes/overlays/prod/observability/loki-patch.yaml
+# ---------------------------------------------------------

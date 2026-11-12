@@ -1,0 +1,23 @@
+configs:
+  params:
+    server.insecure: "true"
+
+# Repo-Server: Allocates memory to process large Helm charts like kube-prometheus-stack
+repoServer:
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 1000m
+      memory: 1536Mi
+
+# Application Controller: Handles state reconciliation without crashing under heavy CRD loads
+controller:
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 1000m
+      memory: 1024Mi

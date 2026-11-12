@@ -1,0 +1,22 @@
+# ---------------------------------------------------------
+# PROD OVERRIDES /kubernetes/overlays/prod/observability/prometheus-patch.yaml
+# ---------------------------------------------------------
+prometheus:
+  prometheusSpec:
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 50Gi
+
+alertmanager:
+  alertmanagerSpec:
+    storage:
+      volumeClaimTemplate:
+        spec:
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 2Gi

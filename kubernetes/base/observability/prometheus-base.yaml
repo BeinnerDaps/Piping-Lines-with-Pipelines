@@ -1,0 +1,123 @@
+# ---------------------------------------------------------
+# BASE default for /kubernetes/base/observability/prometheus-base.yaml
+# ---------------------------------------------------------
+
+crds:
+  enabled: true
+
+# ---------------------------------------------------------
+# GRAFANA: UI & Dashboards
+# ---------------------------------------------------------
+grafana:
+  enabled: true
+  replicas: 1
+  adminPassword: "admin123" # Replace with SealedSecrets integration later
+  
+  # Base datasources assume Loki and Tempo are deployed in the same namespace.
+  # Kubernetes DNS will automatically resolve these relative service names.
+  additionalDataSources:
+    # 1. Prometheus (Metrics)
+    - name: Prometheus
+      type: prometheus
+      access: proxy
+      url: http://prometheus-cluster-ops-kub-prometheus.observability.svc.cluster.local:9090
+      jsonData:
+        timeInterval: 15s
+
+    # 2. Loki (Logs)
+    - name: Loki
+      type: loki
+      access: proxy
+      url: http://loki-cluster-ops.observability.svc.cluster.local:3100
+      jsonData:
+        maxLines: 1000
+
+    # 3. Tempo (Traces)
+    - name: Tempo
+      type: tempo
+      access: proxy
+      url: http://tempo-cluster-ops.observability.svc.cluster.local:3100
+
+  extraObjects:
+    - apiVersion: gateway.networking.k8s.io/v1
+      kind: HTTPRoute
+      metadata:
+        name: grafana-route
+        namespace: observability
+      spec:
+        parentRefs:
+          - group: gateway.networking.k8s.io
+            kind: Gateway
+            name: main-gateway
+            namespace: envoy-gateway-system
+            sectionName: observability-listener 
+        rules:
+          - matches:
+              - path:
+                  type: PathPrefix
+                  value: /
+            backendRefs:
+              - group: ""
+                kind: Service
+                name: prometheus-cluster-ops-grafana
+                port: 80
+                weight: 1
+
+# ---------------------------------------------------------
+# PROMETHEUS: Metric Scraping & Storage
+# ---------------------------------------------------------
+prometheus:
+  enabled: true
+  prometheusSpec:
+    replicas: 2
+    retention: 30d
+    # Look across ALL namespaces for ServiceMonitors
+    serviceMonitorNamespaceSelector: {}
+    # Look across ALL namespaces for PodMonitors
+    podMonitorNamespaceSelector: {}
+    # Pick up ALL ServiceMonitors removing the strict requirement for the "release: prometheus-cluster-ops" label.
+    serviceMonitorSelector: {}
+    
+    # Pod Anti-Affinity ensures the 2 replicas do not schedule on the same node
+    affinity:
+      podAntiAffinity:
+        requiredDuringSchedulingIgnoredDuringExecution:
+        - labelSelector:
+            matchExpressions:
+            - key: app.kubernetes.io/name
+              operator: In
+              values:
+              - prometheus
+          topologyKey: "kubernetes.io/hostname"
+
+    # Guaranteed QoS: Requests exactly match Limits to prevent OOM kills
+    resources:
+      requests:
+        memory: 2Gi
+        cpu: 1000m
+      limits:
+        memory: 2Gi
+        cpu: 1000m
+
+    # Security Context: Enforce least privilege
+    securityContext:
+      runAsNonRoot: true
+      runAsUser: 1000
+      fsGroup: 2000
+      seccompProfile:
+        type: RuntimeDefault
+  
+# ---------------------------------------------------------
+# ALERTMANAGER: Alert Routing
+# ---------------------------------------------------------
+alertmanager:
+  enabled: true
+  alertmanagerSpec:
+    replicas: 2
+    resources:
+      requests:
+        memory: 256Mi
+        cpu: 100m
+      limits:
+        memory: 256Mi
+        cpu: 100m

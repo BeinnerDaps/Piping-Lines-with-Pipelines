@@ -1,0 +1,46 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: task-app-aws
+  namespace: argocd
+  annotations:
+    # 1. The image list
+    argocd-image-updater.argoproj.io/image-list: backend=registry.gitlab.stratpoint.cloud/devops-bootcamp/interns-batch2026-2/devops-magdamo-bien/piping-devops-pipelines/backend, frontend=registry.gitlab.stratpoint.cloud/devops-bootcamp/interns-batch2026-2/devops-magdamo-bien/piping-devops-pipelines/frontend
+    argocd-image-updater.argoproj.io/write-back-method: argocd # Write back to the ArgoCD API, not Git
+
+    # Backend
+    argocd-image-updater.argoproj.io/backend.pull-secret: secret:argocd/gitlab-registry-secret
+    argocd-image-updater.argoproj.io/backend.update-strategy: digest
+    argocd-image-updater.argoproj.io/backend.helm.image-tag:  backend.image.tag
+
+    # Frontend
+    argocd-image-updater.argoproj.io/frontend.pull-secret: secret:argocd/gitlab-registry-secret
+    argocd-image-updater.argoproj.io/frontend.update-strategy: digest
+    argocd-image-updater.argoproj.io/frontend.helm.image-tag: frontend.image.tag
+spec:
+  project: default
+  destination:
+    server: 'https://kubernetes.default.svc'
+    namespace: task-app-aws
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+  sources:
+    - repoURL: 'https://gitlab.stratpoint.cloud/devops-bootcamp/interns-batch2026-2/devops-magdamo-bien/piping-devops-pipelines.git'
+      targetRevision: HEAD
+      path: kubernetes/helm/task-app
+      helm:
+        valueFiles:
+          - $values/kubernetes/base/task-app/task-app-values-base.yaml
+          - $values/kubernetes/overlays/aws/task-app/task-app-values-patch.yaml
+
+    - repoURL: 'https://gitlab.stratpoint.cloud/devops-bootcamp/interns-batch2026-2/devops-magdamo-bien/piping-devops-pipelines.git'
+      targetRevision: HEAD
+      path: kubernetes/overlays/aws/task-app/sealed-secrets
+
+    - repoURL: 'https://gitlab.stratpoint.cloud/devops-bootcamp/interns-batch2026-2/devops-magdamo-bien/piping-devops-pipelines.git'
+      targetRevision: HEAD
+      ref: values

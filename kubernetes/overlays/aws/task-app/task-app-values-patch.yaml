@@ -1,0 +1,17 @@
+# AWS demo overlay — layered on top of kubernetes/base/task-app/task-app-values-base.yaml
+# Only put deltas from base here. CI's update_manifests_aws job (see below) owns
+# backend.image.tag / frontend.image.tag — don't hand-edit those once CI is wired up.
+NODE_ENV: "aws-demo"
+
+frontend:
+  replicas: 1
+  service_type: "ClusterIP"
+
+backend:
+  replicas: 1
+  service_type: "ClusterIP"
+
+postgres:
+  service_type: "ClusterIP"
+  # gp3 StorageClass (kubernetes/addons/ebs-storageclass.yaml) must be applied
+  # to the cluster before this PVC binds — kind's local-path SC doesn't exist on EKS

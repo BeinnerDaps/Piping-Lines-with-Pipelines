@@ -1,0 +1,34 @@
+# ---------------------------------------------------------
+# DEV Overrides for /kubernetes/overlays/dev/observability/tempo-patch.yaml
+# ---------------------------------------------------------
+
+# Degrade for kind/WSL2
+replicas: 1
+
+tempo:
+  storage:
+    trace:
+      backend: local
+      local:
+        path: /var/tempo/traces
+      wal:
+        path: /var/tempo/wal
+        
+# Override retention for dev environment
+compactor:
+  config:
+    compaction:
+      block_retention: 24h
+
+# Disable PVCs, run traces in memory
+persistence:
+  enabled: false
+
+# Burstable QoS for local execution
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi

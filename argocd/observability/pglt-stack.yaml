@@ -1,0 +1,89 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: observability-stack
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-options: PreventDeletion=true
+spec:
+  syncPolicy:
+    applicationsSync: create-update
+    preserveResourcesOnDeletion: true
+  generators:
+    - list:
+        elements:
+          # --- PROMETHEUS + GRAFANA ---
+          - appName: prometheus
+            env: dev
+            cluster_url: https://kubernetes.default.svc
+            helmRepo: https://prometheus-community.github.io/helm-charts
+            chartName: kube-prometheus-stack
+            chartVersion: 87.7.0
+            baseFile: prometheus-base.yaml
+            patchFile: prometheus-patch.yaml
+    
+          # --- LOKI ---
+          - appName: loki
+            env: dev
+            cluster_url: https://kubernetes.default.svc
+            helmRepo: https://grafana-community.github.io/helm-charts
+            chartName: loki
+            chartVersion: 6.27.0
+            baseFile: loki-base.yaml
+            patchFile: loki-patch.yaml
+          
+          # --- TEMPO ---
+          - appName: tempo
+            env: dev
+            cluster_url: https://kubernetes.default.svc
+            helmRepo: https://grafana-community.github.io/helm-charts
+            chartName: tempo
+            chartVersion: 1.8.0
+            baseFile: tempo-base.yaml
+            patchFile: tempo-patch.yaml
+
+          # --- ALLOY ---
+          - appName: alloy
+            env: dev
+            cluster_url: https://kubernetes.default.svc
+            helmRepo: https://grafana.github.io/helm-charts
+            chartName: alloy
+            chartVersion: 0.12.0
+            baseFile: alloy-base.yaml
+            patchFile: alloy-patch.yaml
+  template:
+    metadata:
+      name: '{{appName}}-cluster-ops'
+      namespace: argocd
+      annotations:
+        argocd.argoproj.io/sync-options: PreventDeletion=true
+    spec:
+      project: default
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        managedNamespaceMetadata:
+          labels:
+            observability: enabled
+        syncOptions:
+          - CreateNamespace=true
+          - ServerSideApply=true
+      sources:
+        # Source 1: Prometheus public Helm chart
+        - repoURL: '{{helmRepo}}'
+          chart: '{{chartName}}'
+          targetRevision: '{{chartVersion}}'
+          helm:
+            valueFiles:
+              # Base definition applied first
+              - '$values/kubernetes/base/observability/{{baseFile}}'
+              # Environment specific mutations applied second
+              - '$values/kubernetes/overlays/{{env}}/observability/{{patchFile}}'
+        # Source 2: GitLab repo containing the overrides
+        - repoURL: 'https://gitlab.stratpoint.cloud/devops-bootcamp/interns-batch2026-2/devops-magdamo-bien/piping-devops-pipelines.git' 
+          targetRevision: HEAD
+          ref: values
+      destination:
+        server: '{{cluster_url}}'
+        namespace: observability

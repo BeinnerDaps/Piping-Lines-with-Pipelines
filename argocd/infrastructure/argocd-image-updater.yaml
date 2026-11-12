@@ -1,0 +1,33 @@
+apiVersion: argocd-image-updater.argoproj.io/v1alpha1
+kind: ImageUpdater
+metadata:
+  name: task-app-updater
+  namespace: argocd
+spec:
+  # 1. Write back to the ArgoCD API, not Git
+  writeBackConfig:
+    method: argocd
+    
+  # 2. Target the specific Application(s)
+  applicationRefs:
+    - namePattern: "task-app-*"
+      
+      # 3. Define the images and rules
+      images:
+        - alias: backend
+          imageName: registry.gitlab.stratpoint.cloud/devops-bootcamp/interns-batch2026-2/devops-magdamo-bien/piping-devops-pipelines/backend:latest
+          commonUpdateSettings:
+            updateStrategy: digest
+            pullSecret: pullsecret:argocd/gitlab-registry-secret
+          manifestTargets:
+            helm:
+              tag: backend.image.tag
+
+        - alias: frontend
+          imageName: registry.gitlab.stratpoint.cloud/devops-bootcamp/interns-batch2026-2/devops-magdamo-bien/piping-devops-pipelines/frontend:latest
+          commonUpdateSettings:
+            updateStrategy: digest
+            pullSecret: pullsecret:argocd/gitlab-registry-secret
+          manifestTargets:
+            helm:
+              tag: frontend.image.tag

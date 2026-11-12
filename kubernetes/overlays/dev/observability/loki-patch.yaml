@@ -1,0 +1,49 @@
+# ---------------------------------------------------------
+# DEV Overrides for /kubernetes/overlays/dev/observability/loki-patch.yaml
+# ---------------------------------------------------------
+
+# Force into a single container for kind/WSL2
+deploymentMode: SingleBinary
+
+chunksCache:
+  enabled: false
+resultsCache:
+  enabled: false
+gateway:
+  enabled: false  
+
+loki:
+  # Strip anti-affinity for single-node cluster
+  podAntiAffinity: {}
+  commonConfig:
+    replication_factor: 1
+  storage:
+    type: filesystem
+
+# Disable all microservices
+write:
+  replicas: 0
+read:
+  replicas: 0
+backend:
+  replicas: 0
+
+# Lower to Ephemeral storage to prevent WSL2 disk bloat
+singleBinary:
+  replicas: 1
+  persistence:
+    enabled: false
+  # Mount writable scratch memory over /var/loki to bypass read-only root FS
+  extraVolumes:
+    - name: loki-scratch
+      emptyDir: {}
+  extraVolumeMounts:
+    - name: loki-scratch
+      mountPath: /var/loki
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi

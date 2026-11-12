@@ -1,0 +1,42 @@
+# ---------------------------------------------------------
+# BASE default for /kubernetes/base/observability/tempo-base.yaml
+# ---------------------------------------------------------
+
+# Enable OTLP ingest so the Node.js app can send traces
+traces:
+  otlp:
+    http:
+      enabled: true
+    grpc:
+      enabled: true
+
+# Base Production Settings
+replicas: 3
+
+tempo:
+  storage:
+    trace:
+      backend: local
+      local:
+        path: /var/tempo/traces
+      wal:
+        path: /var/tempo/wal
+
+compactor:
+  config:
+    compaction:
+      block_retention: 720h  # 30 days retention for prod
+
+persistence:
+  enabled: true
+  size: 50Gi
+  accessModes:
+    - ReadWriteOnce
+
+resources:
+  requests:
+    cpu: 1000m
+    memory: 2Gi
+  limits:
+    cpu: 1000m
+    memory: 2Gi

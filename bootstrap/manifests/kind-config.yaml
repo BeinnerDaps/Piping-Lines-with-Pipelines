@@ -1,0 +1,27 @@
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+nodes:
+- role: control-plane
+  kubeadmConfigPatches:
+  - |
+    kind: InitConfiguration
+    nodeRegistration:
+      kubeletExtraArgs:
+        node-labels: "ingress-ready=true"
+  extraPortMappings:
+  # task-app-dev
+  - containerPort: 8080 
+    hostPort: 8080
+    protocol: TCP
+  # task-app-prod
+  - containerPort: 8090 
+    hostPort: 8090
+    protocol: TCP
+  # ArgoCD
+  - containerPort: 8081
+    hostPort: 8081
+    protocol: TCP
+  # Grafana 
+  - containerPort: 8082
+    hostPort: 8082
+    protocol: TCP
